@@ -1,0 +1,483 @@
+---
+title: "Tugas Praktikum 1 MPDW"
+author: "Robertus Mozart Sinaga - G1401231032"
+date: "2025-08-31"
+output: html_document
+---
+
+```{r}
+library(readxl)
+library(readr)
+library(rio)
+library(forecast)
+library(graphics)
+library(tseries)
+library(TTR)
+library(TSA)
+library(ggplot2)
+```
+
+###DATA
+```{r}
+weather <- read.csv("C:/Users/Robert/Downloads/cleaned_weather.csv")
+```
+
+#### Mengambil 100 Data
+```{r}
+data <- weather[401:500, c("date","VPdef")]
+data
+```
+
+```{r}
+data$VPdef <- as.numeric(data$VPdef)
+data$VPdef
+```
+
+#### Data Time Series
+```{r}
+data_ts <- ts(data$VPdef)
+data_ts
+```
+
+### EKSPLORASI DATA
+#### Ringkasan Data
+```{r}
+summary(data_ts)
+```
+#### Plot Data Time Series
+```{r}
+ts.plot(data_ts, xlab="Time Period", ylab="VPdef", 
+        main = "Time Series Plot")
+points(data_ts)
+```
+##### Data tidak memiliki kecenderungan tren naik / turun secara konsisten, maka bisa dikatakan tidak memiliki tren karena hanya berupa fluktuasi lokal.
+
+### SINGLE MOVING AVERAGE (SMA)
+#### Split Data (80% Data Train, 20% Data Test)
+```{r}
+# jumlah data
+n <- nrow(data)
+n
+
+# batas data train 80%
+n_train <- floor(0.8 * n)
+n_train
+
+# bagi data
+training <- data[1:n_train, ]
+training
+testing  <- data[(n_train+1):n, ]
+testing
+
+# ubah ke time series
+training_ts <- ts(training$VPdef)
+training_ts
+testing_ts <- ts(testing$VPdef)
+testing_ts
+```
+#### Plot Data Train
+```{r}
+plot(training_ts, col="blue",main="Plot Data Train")
+points(training_ts)
+```
+#### Plot Data Test
+```{r}
+plot(testing_ts, col="red",main="Plot Data Test")
+points(testing_ts)
+```
+#### Plot Semua Data
+```{r}
+plot(data_ts, col="green",main="Plot Semua Data")
+points(data_ts)
+```
+
+```{r}
+data_sma <- SMA(training_ts, n=4)
+data_sma
+```
+##### Data pemulusan pada periode ke-t digunakan sebagai nilai peramalan pada periode ke t+1, hasil peramalannya ditunjukkan di bawah ini.
+```{r}
+data_ramal <- c(NA,data_sma)
+data_ramal
+```
+
+```{r}
+data_gab <- cbind(
+  aktual=c(data_ts),
+  pemulusan=c(data_sma,rep(NA,24)),
+  ramalan=c(data_ramal,rep(data_ramal[length(data_ramal)],23)))
+data_gab
+```
+
+#### Plot Hasil Pemulusan dan Peramalan
+```{r}
+ts.plot(data_ts, xlab="Date", ylab="VPdef", main= "SMA N=4 VPdef")
+points(data_ts)
+lines(data_gab[,2],col="green",lwd=2)
+lines(data_gab[,3],col="red",lwd=2)
+legend("topleft",c("data aktual","data pemulusan","data peramalan"), lty=8, col=c("black","green","red"), cex=0.5)
+```
+
+```{r}
+#Hitung keakuratan data train
+error_train_sma = training_ts-data_ramal[1:length(training_ts)]
+
+SSE_train_sma = sum(error_train_sma[5:length(training_ts)]^2)
+MSE_train_sma = mean(error_train_sma[5:length(training_ts)]^2)
+MAPE_train_sma = mean(abs((error_train_sma[5:length(training_ts)]/training_ts[5:length(training_ts)])*100))
+
+akurasi_train_sma <- matrix(c(SSE_train_sma, MSE_train_sma, MAPE_train_sma))
+row.names(akurasi_train_sma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi_train_sma) <- c("Akurasi m = 4")
+akurasi_train_sma
+```
+
+```{r}
+# Ambil data aktual (baris 81-104, kolom 1)
+actual_test <- data_gab[81:104, 1]
+
+# Ambil data ramalan (baris 81-104, kolom 3)
+forecast_test <- data_gab[81:104, 3]
+
+# Hitung error
+error_test_sma <- actual_test - forecast_test
+
+# Hitung metrik
+SSE_test_sma <- sum(error_test_sma^2)
+MSE_test_sma <- mean(error_test_sma^2)
+MAPE_test_sma <- mean(abs(error_test_sma / actual_test * 100))
+
+# Simpan dalam matrix
+akurasi_test_sma <- matrix(c(SSE_test_sma, MSE_test_sma, MAPE_test_sma))
+row.names(akurasi_test_sma) <- c("SSE", "MSE", "MAPE")
+colnames(akurasi_test_sma) <- c("Akurasi m = 4")
+
+akurasi_test_sma
+```
+### INTERPRETASI SMA
+##### Training : MAPE = 7.17% (cukup baik karena 5% ≤ MAPE < 10%), model mampu mengikuti pola data train. Testing : MAPE = 17.54% (kurang baik), namun model masih bisa & cukup layak digunakan untuk peramalan.
+
+### DOUBLE MOVING AVERAGE (DMA)
+```{r}
+dma <- SMA(data_sma, n = 4)
+At <- 2*data_sma - dma
+Bt <- 2/(4-1)*(data_sma - dma)
+data_dma<- At+Bt
+data_ramal<- c(NA, data_dma)
+
+t = 1:24
+f = c()
+
+for (i in t) {
+  f[i] = At[length(At)] + Bt[length(Bt)]*(i)
+}
+
+data_gab2 <- cbind(aktual = c(data_ts), 
+                   pemulusan1 = c(data_sma,rep(NA,24)),
+                   pemulusan2 = c(dma, rep(NA,24)),
+                   At = c(At, rep(NA,24)), 
+                   Bt = c(Bt,rep(NA,24)),
+                   ramalan = c(data_ramal, f[-1]))
+data_gab2
+```
+
+```{r}
+ts.plot(data_ts, xlab="Time Period ", ylab="VPdef", main= "DMA N=4 VPdef")
+points(data_ts)
+lines(data_gab2[,3],col="green",lwd=2)
+lines(data_gab2[,6],col="red",lwd=2)
+legend("topleft",c("data aktual","data pemulusan","data peramalan"), lty=8, col=c("black","green","red"), cex=0.8)
+```
+
+```{r}
+#Menghitung keakuratan data train
+error_train_dma = training_ts-data_ramal[1:length(training_ts)]
+
+SSE_train_dma = sum(error_train_dma[8:length(training_ts)]^2)
+MSE_train_dma = mean(error_train_dma[8:length(training_ts)]^2)
+MAPE_train_dma = mean(abs((error_train_dma[8:length(training_ts)]/training_ts[8:length(training_ts)])*100))
+
+akurasi_train_dma <- matrix(c(SSE_train_dma, MSE_train_dma, MAPE_train_dma))
+row.names(akurasi_train_dma)<- c("SSE", "MSE", "MAPE")
+colnames(akurasi_train_dma) <- c("Akurasi m = 4")
+akurasi_train_dma
+```
+
+```{r}
+n_test <- length(testing_ts)        
+error_test_dma <- testing_ts - data_gab2[(nrow(data_gab2)-n_test+1):nrow(data_gab2), 6]
+
+SSE_test_dma <- sum(error_test_dma^2)
+MSE_test_dma <- mean(error_test_dma^2)
+MAPE_test_dma <- mean(abs(error_test_dma / testing_ts * 100))
+
+akurasi_test_dma <- matrix(c(SSE_test_dma, MSE_test_dma, MAPE_test_dma))
+row.names(akurasi_test_dma) <- c("SSE", "MSE", "MAPE")
+colnames(akurasi_test_dma) <- c("Akurasi m = 4")
+akurasi_test_dma
+```
+### INTERPRETASI DMA
+##### Training : MAPE = 8.23% (cukup baik karena 5% ≤ MAPE < 10%), model mampu mengikuti pola data train. Testing : MAPE = 5.62% (baik), sehingga pada data uji, model menghasilkan prediksi yang lebih akurat untuk peramalan.
+
+### Simple Exponential Smoothing (SES)
+```{r}
+#Ubah ke time series
+train_ma_ts <- ts(training$VPdef)
+test_ma_ts  <- ts(testing$VPdef)
+
+#Fungsi ses
+ses_1 <- ses(train_ma_ts, h = 10, alpha = 0.2)
+plot(ses_1)
+```
+```{r}
+ses_1
+```
+
+```{r}
+ses_2<- ses(train_ma_ts, h = 10, alpha = 0.7)
+plot(ses_2)
+```
+```{r}
+ses_2
+```
+
+```{r}
+autoplot(ses_1) +
+  autolayer(fitted(ses_1), series="Fitted") +
+  ylab("VPdef") + xlab("Time Period")
+```
+
+```{r}
+#Fungsi Holtwinter
+ses1<- HoltWinters(train_ma_ts, gamma = FALSE, beta = FALSE, alpha = 0.2)
+plot(ses1)
+```
+
+```{r}
+ramalan1 <- forecast(ses1, h=10)
+ramalan1
+```
+
+```{r}
+ses2 <- HoltWinters(train_ma_ts, gamma = FALSE, beta = FALSE, alpha = 0.7)
+plot(ses2)
+```
+
+```{r}
+ramalan2 <- forecast(ses2, h=10)
+ramalan2
+```
+
+```{r}
+ses_opt <- ses(train_ma_ts, h = 10, alpha = NULL)
+plot(ses_opt)
+```
+```{r}
+ses_opt
+```
+
+```{r}
+#Lamda Optimum Holt Winter
+HWopt <- HoltWinters(train_ma_ts, gamma = FALSE, beta = FALSE, alpha = NULL)
+HWopt
+```
+```{r}
+plot(HWopt)
+```
+
+```{r}
+ramalanopt<- forecast(HWopt, h=10)
+ramalanopt
+```
+
+```{r}
+# Keakuratan metode pada data training
+
+# SES dengan alpha = 0.2
+SSE1<-ses1$SSE
+MSE1<-ses1$SSE/length(train_ma_ts)
+RMSE1<-sqrt(MSE1)
+
+akurasi1 <- matrix(c(SSE1,MSE1,RMSE1))
+rownames(akurasi1)<- c("SSE", "MSE", "RMSE")
+colnames(akurasi1) <- c("Akurasi lamda=0.2")
+akurasi1
+```
+
+```{r}
+# SES dengan alpha = 0.7
+SSE2<-ses2$SSE
+MSE2<-ses2$SSE/length(train_ma_ts)
+RMSE2<-sqrt(MSE2)
+
+akurasi2 <- matrix(c(SSE2,MSE2,RMSE2))
+rownames(akurasi2)<- c("SSE", "MSE", "RMSE")
+colnames(akurasi2) <- c("Akurasi lamda=0.7")
+akurasi2
+```
+
+```{r}
+# Error masing-masing ramalan
+e1   <- as.numeric(ramalan1$mean) - as.numeric(testing$VPdef)
+e2   <- as.numeric(ramalan2$mean) - as.numeric(testing$VPdef)
+eopt <- as.numeric(ramalanopt$mean) - as.numeric(testing$VPdef)
+
+# SSE / MSE / RMSE
+SSEtesting1  <- sum(e1^2)
+MSEtesting1  <- mean(e1^2)
+RMSEtesting1 <- sqrt(MSEtesting1)
+
+SSEtesting2  <- sum(e2^2)
+MSEtesting2  <- mean(e2^2)
+RMSEtesting2 <- sqrt(MSEtesting2)
+
+SSEtestingopt  <- sum(eopt^2)
+MSEtestingopt  <- mean(eopt^2)
+RMSEtestingopt <- sqrt(MSEtestingopt)
+
+# Gabung hasil
+hasil_test <- data.frame(
+  Model = c("SES α=0.2","SES α=0.7","SES Optimal"),
+  SSE = c(SSEtesting1, SSEtesting2, SSEtestingopt),
+  MSE = c(MSEtesting1, MSEtesting2, MSEtestingopt),
+  RMSE = c(RMSEtesting1, RMSEtesting2, RMSEtestingopt)
+)
+
+hasil_test
+```
+### INTERPRETASI SES
+##### Training SES λ=0.2 → SSE = 2.13, RMSE = 0.16 → error tidak terlalu besar, model masih dapat mengikuti perubahan. SES λ=0.7 → SSE = 0.89, RMSE = 0.11 → lebih baik, model lebih responsif. Kesimpulan: Pada data train, λ besar lebih unggul → model cepat menyesuaikan diri terhadap pola data.
+
+##### Testing SES α=0.2 → RMSE = 0.4 → performa turun (over-smooth). SES α=0.7 → RMSE = 0.36 → masih lebih baik dan konsisten. SES Optimal → RMSE = 0.35 → mirip dengan α=0.7, terbukti bahwa data cocok dengan smoothing yang responsif. Kesimpulan: Pada data uji, α besar (0.7) tetap memberikan hasil terbaik, walaupun error sedikit lebih tinggi dibandingkan data training → maka model cukup stabil.
+
+##### Overall SES dengan α kecil kurang cocok untuk data berskala 10 menit yang fluktuatif. SES dengan α tinggi (0.7) atau optimal lebih sesuai karena lebih mampu menangkap pola jangka pendek.
+
+### DES
+```{r}
+#Lamda=0.2 dan gamma=0.2
+des_1<- HoltWinters(train_ma_ts, gamma = FALSE, beta = 0.2, alpha = 0.2)
+plot(des_1)
+```
+
+```{r}
+#ramalan
+ramalandes1<- forecast(des_1, h=10)
+ramalandes1
+```
+
+```{r}
+#Lamda=0.6 dan gamma=0.3
+des_2<- HoltWinters(train_ma_ts, gamma = FALSE, beta = 0.3, alpha = 0.6)
+plot(des_2)
+```
+
+```{r}
+#ramalan
+ramalandes2<- forecast(des_2, h=10)
+ramalandes2
+```
+
+```{r}
+plot(data_ts)
+lines(des_1$fitted[,1], lty=2, col="blue")
+lines(ramalandes1$mean, col="red")
+```
+
+```{r}
+#Lamda dan gamma optimum
+des_opt<- HoltWinters(train_ma_ts, gamma = FALSE)
+des_opt
+```
+
+```{r}
+plot(des_opt)
+```
+
+```{r}
+#ramalan
+ramalandesopt<- forecast(des_opt, h=10)
+ramalandesopt
+```
+
+```{r}
+#Akurasi Data Training
+ssedes_train1<-des_1$SSE
+msedes_train1<-ssedes_train1/length(train_ma_ts)
+sisaandes1<-ramalandes1$residuals
+head(sisaandes1)
+```
+
+```{r}
+mapedes_train1 <- sum(abs(sisaandes1[3:length(train_ma_ts)]/train_ma_ts[3:length(train_ma_ts)])
+                      *100)/length(train_ma_ts)
+
+akurasides.1 <- matrix(c(ssedes_train1,msedes_train1,mapedes_train1))
+rownames(akurasides.1)<- c("SSE", "MSE", "MAPE")
+colnames(akurasides.1) <- c("Akurasi lamda=0.2 dan gamma=0.2")
+akurasides.1
+```
+
+```{r}
+ssedes_train2<-des_2$SSE
+msedes_train2<-ssedes_train2/length(train_ma_ts)
+sisaandes2<-ramalandes2$residuals
+head(sisaandes2)
+```
+
+```{r}
+mapedes_train2 <- sum(abs(sisaandes2[3:length(train_ma_ts)]/train_ma_ts[3:length(train_ma_ts)])
+                      *100)/length(train_ma_ts)
+
+akurasides.2 <- matrix(c(ssedes_train2,msedes_train2,mapedes_train2))
+rownames(akurasides.2)<- c("SSE", "MSE", "MAPE")
+colnames(akurasides.2) <- c("Akurasi lamda=0.6 dan gamma=0.3")
+akurasides.2
+```
+
+```{r}
+train_ma.ts <- ts(train_ma_ts, frequency = 6)
+test_ma.ts  <- ts(test_ma_ts, frequency = 6, start = end(train_ma_ts) + c(0,1))  
+
+# Forecast test
+pred_des1 <- forecast(des_1, h=length(test_ma.ts))$mean
+
+# Residual test
+resid_des1 <- as.numeric(test_ma.ts) - as.numeric(pred_des1)
+
+# Akurasi
+sse_des1_test <- sum(resid_des1^2)
+mse_des1_test <- mean(resid_des1^2)
+mape_des1_test <- mean(abs(resid_des1 / as.numeric(test_ma.ts))) * 100
+
+# Buat matrix akurasi
+akurasi_des1_test <- matrix(c(sse_des1_test, mse_des1_test, mape_des1_test),
+                            nrow=3, ncol=1)
+row.names(akurasi_des1_test) <- c("SSE", "MSE", "MAPE")
+colnames(akurasi_des1_test) <- c("Akurasi DES1 (lamda=0.2, gamma=0.2)")
+akurasi_des1_test
+```
+
+```{r}
+pred_des2 <- forecast(des_2, h=length(test_ma.ts))$mean
+resid_des2 <- as.numeric(test_ma.ts) - as.numeric(pred_des2)
+
+sse_des2_test <- sum(resid_des2^2)
+mse_des2_test <- mean(resid_des2^2)
+mape_des2_test <- mean(abs(resid_des2 / as.numeric(test_ma.ts))) * 100
+
+akurasi_des2_test <- matrix(c(sse_des2_test, mse_des2_test, mape_des2_test),
+                            nrow=3, ncol=1)
+row.names(akurasi_des2_test) <- c("SSE", "MSE", "MAPE")
+colnames(akurasi_des2_test) <- c("Akurasi DES2 (lamda=0.6, gamma=0.3)")
+akurasi_des2_test
+```
+### INTERPRETASI DES
+##### Training: DES1 (λ=0.2, γ=0.2) → SSE = 2.39, MSE = 0.03, MAPE = 9.15 → error cukup tinggi, model terlalu lambat mengikuti tren. DES2 (λ=0.6, γ=0.3) → SSE = 1.18, MSE = 0.01, MAPE = 5.49 → jauh lebih baik, error rendah, model lebih adaptif. Kesimpulan: Pada data latih, kombinasi λ besar + γ sedang (DES2) jauh lebih akurat dibandingkan DES1.
+
+##### Testing: DES1 → SSE = 3.46, MSE = 0.17, MAPE = 19.04 → performa kurang baik, error sangat tinggi. DES2 → SSE = 0.43, MSE = 0.02, MAPE = 6.16 → jauh lebih baik dari DES1. Kesimpulan: Pada data uji, DES2 lebih unggul dibandingkan dengan DES1.
+
+### KESIMPULAN
+##### DES2 (λ=0.6, γ=0.3) memberikan performa terbaik secara konsisten baik di training maupun testing. Model ini paling mampu menangani level dan tren pada data berkurun waktu 10 menit. Terdapat kestabilan model pada data uji dan co
+
+
+
