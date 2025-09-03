@@ -1,0 +1,155 @@
+---
+title: "TUGAS PRAKTIKUM 2 MPDW"
+author: "Robertus Mozart Sinaga - G1401231032"
+date: "2025-09-02"
+output: html_document
+---
+
+
+```{r}
+library(dplyr)
+library(TTR)
+library(forecast)
+library(lmtest)
+library(HoRM)
+```
+```{r}
+remotes::install_cran("orcutt")
+```
+```{r}
+install.packages("https://cran.r-project.org/src/contrib/Archive/orcutt/orcutt_2.3.tar.gz",
+                 repos = NULL, type = "source")
+```
+```{r}
+library(orcutt)
+library(readxl)
+library(readr)
+```
+
+### DATA
+```{r}
+data_ipm <- read.csv("C:/Users/Robert/Downloads/bps-od_15042_indeks_pmbngnn_manusia__prov_di_indonesia_data.csv")
+data_ipm
+```
+
+### MODEL AWAL
+```{r}
+# Membuat model regresi OLS (Ordinary Least Squares)
+model_awal <- lm(IPM ~ Tahun, data = data_ipm)
+model_awal
+summary(model_awal)
+```
+
+### DIAGNOSIS
+```{r}
+# Ambil sisaan dari model
+sisaan_awal <- residuals(model_awal)
+
+# Plot sisaan terhadap waktu
+plot(data_ipm$Tahun, sisaan_awal, type="o", pch=20, col="red",
+     main="Plot Sisaan vs Waktu", xlab="Tahun", ylab="Sisaan")
+abline(h=0, lty=2) # Garis referensi di y=0
+```
+##### Plot memiliki pola yang tidak acak dan sisaan cenderung berkelompok, menunjukkan adanya autokorelasi.
+
+### Uji Durbin-Watson
+##### H0 : Tidak ada autokorelasi. Sisaan saling bebas.
+##### H1 : Ada autokorelasi.
+```{r}
+dwtest(model_awal)
+```
+##### p-value kecil (0.0001108), maka menolak H0
+
+### PENANGANAN (Metode 1: Cochrane-Orcutt)
+```{r}
+model_co <- cochrane.orcutt(model_awal)
+summary(model_co)
+```
+
+```{r}
+# rho paling optimum
+rho <- model_co$rho
+cat("Rho optimum:", rho)
+```
+
+```{r}
+ipm.trans <- data_ipm$IPM[-1] - data_ipm$IPM[-12]*rho
+
+tahun.trans <- data_ipm$Tahun[-1] - data_ipm$Tahun[-12]*rho
+model_co_manual <- lm(ipm.trans~tahun.trans)
+
+b0_co_manual <- coef(model_co_manual)[1]/(1-rho)
+b1_co_manual <- coef(model_co_manual)[2]
+cat("Koefisien manual Cochrane-Orcutt:\n")
+cat("b0:", b0_co_manual, "\n")
+cat("b1:", b1_co_manual, "\n")
+```
+
+### PENANGANAN (Metode 2: Hildreth-Lu)
+```{r}
+#Penanganan Autokorelasi Hildreth-Lu
+hildreth.lu.func<- function(r, model){
+  x <- model.matrix(model)[,-1]
+  y <- model.response(model.frame(model))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t]-r*y[t-1]
+  x <- x[t]-r*x[t-1]
+  
+  return(lm(y~x))
+}
+
+#Pencarian rho yang meminimumkan SSE
+r <- c(seq(0.1,0.9, by= 0.1))
+tab <- data.frame("rho" = r, "SSE" = sapply(r, function(i){deviance(hildreth.lu.func(i, model_awal))}))
+round(tab, 4)
+```
+
+```{r}
+#Rho optimal 
+rOpt <- seq(0.6,0.9, by= 0.001)
+tabOpt <- data.frame("rho" = rOpt, "SSE" = sapply(rOpt, function(i){deviance(hildreth.lu.func(i, model_awal))}))
+head(tabOpt[order(tabOpt$SSE),])
+```
+
+```{r}
+#Grafik SSE optimum
+par(mfrow = c(1,1))
+plot(tab$SSE ~ tab$rho , type = "l", xlab = "Rho", ylab = "SSE")
+abline(v = tabOpt[tabOpt$SSE==min(tabOpt$SSE),"rho"], lty = 2, col="red",lwd=2)
+text(x=0.736, y=3.6527, labels = "rho=0.736", cex = 0.8)
+```
+
+```{r}
+model_hl <- hildreth.lu(data_ipm$IPM, data_ipm$Tahun, rho = 0.736)
+summary(model_hl)
+```
+
+```{r}
+#Transformasi Balik
+cat("y = ", coef(model_hl)[1]/(1-0.736), "+", coef(model_hl)[2],"x", sep = "")
+```
+
+```{r}
+#Deteksi autokorelasi
+dwtest(model_hl)
+```
+
+```{r}
+# Menghitung SSE untuk setiap model secara manual
+sse_awal <- sum(residuals(model_awal)^2)
+sse_co <- sum(residuals(model_co)^2)
+sse_hl <- sum(residuals(model_hl)^2)
+
+# Membuat tabel perbandingan
+data.frame(
+  Metode = c("Model Awal (Sakit)", "Cochrane-Orcutt (Sehat)", "Hildreth-Lu (Sehat)"),
+  SSE = c(sse_awal, sse_co, sse_hl),
+  DW_Statistic = c(dwtest(model_awal)$statistic, model_co$DW[3], dwtest(model_hl)$statistic)
+)
+```
+
+### KESIMPULAN
+##### -Metode Cochrane-Orcutt dan Hildreth-Lu berhasil menurunkan SSE model sehingga model yang baru lebih akurat.
+##### -Kedua metode berhasil mengatasi autokorelasi pada model awal.
+
