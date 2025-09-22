@@ -1,0 +1,356 @@
+---
+title: "Tugas Praktkum 4 MPDW"
+author: "Robertus Mozart Sinaga - G1401231032"
+date: "2025-09-19"
+output: html_document
+---
+
+```{r}
+library(TSA)
+```
+
+# A. Proses MA(2)
+
+## 1) Model MA(2) dengan 𝜃1 = 0.4 dan 𝜃2 = 0.6 sebanyak 300 data (manual dan arima.sim)
+
+### Data Manual
+```{r}
+set.seed(1234)
+n <- 300
+wn <- rnorm(n)
+```
+
+```{r}
+ma_manual <- rep(0, n)
+ma_manual[1:2] <- wn[1:2]
+
+for(i in 3:n) {
+  ma_manual[i] <- wn[i] + 0.4 * wn[i-1] + 0.6 * wn[i-2]
+}
+ma_manual
+```
+
+### Data arima.sim
+```{r}
+ma_as <- arima.sim(list(order=c(0,0,2), ma=c(0.4, 0.6)), n=300)
+ma_as
+```
+
+## 2) Plot time series, plot ACF, plot PACF, plot EACF. Idenifikasi apakah data tersebut stasioner
+
+### Plot Time Series
+```{r}
+ts.plot(ma_manual, main="Time Series MA(2) Manual")
+```
+```{r}
+ts.plot(ma_as, main="Time Series MA(2) arima.sim")
+```
+Berdasarkan plot time series, model MA(2) terlihat stasioner karena tidak menunjukkan tren dan variasinya konstan sepanjang waktu.
+
+### Plot ACF
+```{r}
+acf(ma_manual, lag.max=20, main="ACF MA(2) Manual")
+```
+```{r}
+acf(ma_as, lag.max=20, main="ACF MA(2) arima.sim")
+```
+Berdasarkan plot ACF, plot terlihat mengalami *cuts off* setelah lag kedua.
+
+### Plot PACF
+```{r}
+pacf(ma_manual, lag.max=20, main="PACF MA(2) Manual")
+```
+```{r}
+pacf(ma_as, lag.max=20, main="PACF MA(2) arima.sim")
+```
+Berdasarkan plot PACF, plot cenderung *tails off* dan membentuk gelombang sinus.
+
+### Plot EACF
+```{r}
+eacf(ma_manual)
+```
+```{r}
+eacf(ma_as)
+```
+Berdasarkan plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(0) dan ordo MA(2).
+
+## 3) Scatterplot antara $Y_t$ dengan $Y_{t-1}$, $Y_t$ dengan $Y_{t-2}$, serta $Y_t$ dengan $Y_{t-3}$
+
+### Scatterplot $Y_t$ dengan $Y_{t-1}$
+```{r}
+yt1 <- ma_manual[-1]
+yt_1 <- ma_manual[-n]
+plot(x=yt_1, y=yt1, main="Yt vs Yt-1")
+```
+```{r}
+cor(yt1, yt_1)
+```
+Berdasarkan scatterplot, terlihat bahwa ada hubungan positif antara $Y_t$ dengan $Y_{t-1}$, dan nilai korelasi antara $Y_t$ dengan $Y_{t-1}$ (0.527) mendekati perhitungan teoritis yaitu :
+$$
+\rho_1=\frac{0.64}{1.52}=0.421
+$$
+
+### Scatterplot $Y_t$ dengan $Y_{t-2}$
+```{r}
+yt2 <- ma_manual[-c(1,2)]
+yt_2 <- ma_manual[-c((n-1), n)]
+plot(x=yt_2, y=yt2, main="Yt vs Yt-2")
+```
+```{r}
+cor(yt2, yt_2)
+```
+Berdasarkan scatterplot, terlihat bahwa ada hubungan positif antara $Y_t$ dengan $Y_{t-2}$, dan nilai korelasi antara $Y_t$ dengan $Y_{t-2}$ (0.434) mendekati perhitungan teoritis yaitu :
+$$
+\rho_2=\frac{0.6}{1.52}=0.395
+$$
+
+### Scatterplot $Y_t$ dengan $Y_{t-3}$
+```{r}
+yt3 <- ma_manual[-c(1,2,3)]
+yt_3 <- ma_manual[-c((n-2), (n-1), n)]
+plot(x=yt_3, y=yt3, main="Yt vs Yt-3")
+```
+```{r}
+cor(yt3, yt_3)
+```
+Berdasarkan scatterplot, terlihat bahwa tidak ada hubungan positif antara $Y_t$ dengan $Y_{t-3}$, dan nilai korelasi antara $Y_t$ dengan $Y_{t-3}$ (0.086) mendekati perhitungan teoritis yaitu 0
+$$
+\rho_3=0
+$$
+
+## 4) Autokorelasi data bangkitan dan teoritis
+
+```{r}
+acf(ma_manual, lag.max=10, plot=FALSE)$acf
+```
+
+```{r}
+acf(ma_as, lag.max=10, plot=FALSE)$acf
+```
+
+
+# B. Proses AR(2)
+
+## 1) Model AR(2) dengan 𝜙1 = 0.5 dan 𝜙2 = 0.2 sebanyak 300 data (manual dan arima.sim)
+
+### Data Manual
+```{r}
+set.seed(1234)
+n <- 300
+wn <- rnorm(n)
+```
+
+```{r}
+ar_manual <- rep(0, n)
+ar_manual[1:2] <- wn[1:2]
+
+for(i in 3:n) {
+  ar_manual[i] <- 0.5 * ar_manual[i-1] + 0.2 * ar_manual[i-2] + wn[i]
+}
+ar_manual
+```
+
+### Data arima.sim
+```{r}
+ar_as <- arima.sim(list(order=c(2,0,0), ar=c(0.5, 0.2)), n=300)
+ar_as
+```
+
+## 2) Plot time series, plot ACF, plot PACF, plot EACF. Identifikasi apakah data tersebut stasioner
+
+### Plot Time Series
+```{r}
+ts.plot(ar_manual, main="Time Series AR(2) Manual")
+```
+```{r}
+ts.plot(ar_as, main="Time Series AR(2) arima.sim")
+```
+Berdasarkan plot time series, model MA(2) terlihat stasioner karena tidak menunjukkan tren dan variasinya konstan sepanjang waktu.
+
+### Plot ACF
+```{r}
+acf(ar_manual, lag.max=20, main="ACF AR(2) Manual")
+```
+```{r}
+acf(ar_as, lag.max=20, main="ACF AR(2) arima.sim")
+```
+Berdasarkan plot ACF, plot cenderung *tails off* dan membentuk gelombang sinus.
+
+### Plot PACF
+```{r}
+pacf(ar_manual, lag.max=20, main="PACF AR(2) Manual")
+```
+```{r}
+pacf(ar_as, lag.max=20, main="PACF AR(2) arima.sim")
+```
+Berdasarkan plot PACF, plot terlihat mengalami *cuts off* pada lag kedua dan sesuai dengan teori.
+
+### Plot EACF
+```{r}
+eacf(ar_manual)
+```
+```{r}
+eacf(ar_as)
+```
+Berdasarkan plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(1) dan ordo MA(1).
+
+## 3) Scatterplot antara $Y_t$ dengan $Y_{t-1}$, $Y_t$ dengan $Y_{t-2}$, serta $Y_t$ dengan $Y_{t-3}$
+
+### Scatterplot $Y_t$ dengan $Y_{t-1}$
+```{r}
+yt1_ar <- ar_manual[-1]
+yt_1_ar <- ar_manual[-n]
+plot(x=yt_1_ar, y=yt1_ar, main="Yt vs Yt-1")
+```
+```{r}
+cor(yt1_ar, yt_1_ar)
+```
+Berdasarkan scatterplot, terlihat bahwa ada hubungan positif antara $Y_t$ dengan $Y_{t-1}$, dan nilai korelasi antara $Y_t$ dengan $Y_{t-1}$ (0.717) mendekati perhitungan teoritis yaitu :
+$\rho_1=\phi^1=0.625$
+
+### Scatterplot $Y_t$ dengan $Y_{t-2}$
+```{r}
+yt2_ar <- ar_manual[-c(1,2)]
+yt_2_ar <- ar_manual[-c((n-1), n)]
+plot(x=yt_2_ar, y=yt2_ar, main="Yt vs Yt-2")
+```
+```{r}
+cor(yt2_ar, yt_2_ar)
+```
+Berdasarkan scatterplot, terlihat bahwa ada hubungan positif antara $Y_t$ dengan $Y_{t-2}$, dan nilai korelasi antara $Y_t$ dengan $Y_{t-2}$ (0.586) mendekati perhitungan teoritis yaitu :
+$\rho_2=\phi^2=0.513$
+
+### Scatterplot $Y_t$ dengan $Y_{t-3}$
+```{r}
+yt3_ar <- ar_manual[-c(1,2,3)]
+yt_3_ar <- ar_manual[-c((n-2), (n-1), n)]
+plot(x=yt_3_ar, y=yt3_ar, main="Yt vs Yt-3")
+```
+```{r}
+cor(yt3_ar, yt_3_ar)
+```
+Berdasarkan scatterplot, terlihat bahwa ada hubungan positif antara $Y_t$ dengan $Y_{t-3}$, dan nilai korelasi antara $Y_t$ dengan $Y_{t-3}$ (0.461) mendekati perhitungan teoritis yaitu :
+$\rho_3=\phi^3=0.381$
+
+## 4) Autokorelasi data bangkitan dan teoritis
+
+```{r}
+acf(ar_manual, lag.max=10, plot=FALSE)$acf
+```
+
+```{r}
+acf(ar_as, lag.max=10, plot=FALSE)$acf
+```
+
+
+# C. Proses ARMA(2,2)
+
+## 1) Model ARMA(2,2) dengan 𝜃1 = 0.4, 𝜃2 = 0.6 ,𝜙1 = 0.5, dan 𝜙2 = 0.2 sebanyak 300 data (manual dan arima.sim)
+
+### Data Manual
+```{r}
+set.seed(1234)
+n <- 300
+wn <- rnorm(n)
+```
+
+```{r}
+arma_manual <- rep(0, n)
+arma_manual[1:2] <- wn[1:2]
+for(i in 3:n){
+  arma_manual[i] <- 0.5*arma_manual[i-1] + 0.2*arma_manual[i-2] + wn[i] + 0.4*wn[i-1] + 0.6*wn[i-2]
+}
+arma_manual
+```
+
+### Data arima.sim
+```{r}
+arma_as <- arima.sim(list(order=c(2,0,2), ar=c(0.5, 0.2), ma=c(0.4, 0.6)), n=300)
+arma_as
+```
+
+## 2) Plot time series, plot ACF, plot PACF, plot EACF. Identifikasi apakah data tersebut stasioner
+
+### Plot Time Series
+```{r}
+ts.plot(arma_manual, main="Time Series ARMA(2,2) Manual")
+```
+```{r}
+ts.plot(arma_as, main="Time Series ARMA(2,2) arima.sim")
+```
+Berdasarkan plot time series, data ARMA(2,2) terlihat stasioner karena tidak menunjukkan tren dan variasinya konstan sepanjang waktu.
+
+### Plot ACF
+```{r}
+acf(arma_manual, lag.max=20, main="ACF ARMA(2,2) Manual")
+```
+```{r}
+acf(arma_as, lag.max=20, main="ACF ARMA(2,2) arima.sim")
+```
+Berdasarkan plot ACF, plot cenderung *tails off* dan membentuk gelombang sinus.
+
+### Plot PACF
+```{r}
+pacf(arma_manual, lag.max=20, main="PACF ARMA(2,2) Manual")
+```
+```{r}
+pacf(arma_as, lag.max=20, main="PACF ARMA(2,2) arima.sim")
+```
+Berdasarkan plot PACF, plot cenderung *tails off* dan sesuai dengan teori.
+
+### Plot EACF
+```{r}
+eacf(arma_manual)
+```
+```{r}
+eacf(arma_as)
+```
+Berdasarkan plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(1) dan ordo MA(2).
+
+## 3) Scatterplot antara $Y_t$ dengan $Y_{t-1}$, $Y_t$ dengan $Y_{t-2}$, serta $Y_t$ dengan $Y_{t-3}$
+
+### Scatterplot $Y_t$ dengan $Y_{t-1}$
+```{r}
+yt1_arma <- arma_manual[-1]
+yt_1_arma <- arma_manual[-n]
+plot(x=yt_1_arma, y=yt1_arma, main="Yt vs Yt-1")
+```
+```{r}
+cor(yt1_arma, yt_1_arma)
+```
+Berdasarkan scatterplot, terlihat bahwa ada hubungan positif antara $Y_t$ dengan $Y_{t-1}$, dan nilai korelasi antara $Y_t$ dengan $Y_{t-1}$ (0.895) mendekati perhitungan teoritis yaitu :
+$\rho_1=0.859$
+
+### Scatterplot $Y_t$ dengan $Y_{t-2}$
+```{r}
+yt2_arma <- arma_manual[-c(1,2)]
+yt_2_arma <- arma_manual[-c((n-1), n)]
+plot(x=yt_2_arma, y=yt2_arma, main="Yt vs Yt-2")
+```
+```{r}
+cor(yt2_arma, yt_2_arma)
+```
+Berdasarkan scatterplot, terlihat bahwa ada hubungan positif antara $Y_t$ dengan $Y_{t-2}$, dan nilai korelasi antara $Y_t$ dengan $Y_{t-2}$ (0.788) mendekati perhitungan teoritis yaitu :
+$\rho_2=0.749$
+
+### Scatterplot $Y_t$ dengan $Y_{t-3}$
+```{r}
+yt3_arma <- arma_manual[-c(1,2,3)]
+yt_3_arma <- arma_manual[-c((n-2), (n-1), n)]
+plot(x=yt_3_arma, y=yt3_arma, main="Yt vs Yt-3")
+```
+```{r}
+cor(yt3_arma, yt_3_arma)
+```
+Berdasarkan scatterplot, terlihat bahwa ada hubungan positif antara $Y_t$ dengan $Y_{t-3}$, dan nilai korelasi antara $Y_t$ dengan $Y_{t-3}$ (0.618) mendekati perhitungan teoritis yaitu :
+$\rho_3=0.546$
+
+## 4) Autokorelasi data bangkitan dan teoritis
+
+```{r}
+acf(arma_manual, lag.max=10, plot=FALSE)$acf
+```
+
+```{r}
+acf(arma_as, lag.max=10, plot=FALSE)$acf
+```
