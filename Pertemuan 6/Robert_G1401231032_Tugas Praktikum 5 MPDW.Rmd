@@ -1,0 +1,247 @@
+---
+title: "Tugas Praktikum 5 MPDW"
+author: "Robertus Mozart Sinaga - G1401231032"
+date: "2025-10-02"
+output: html_document
+---
+
+# Library
+```{r}
+library(ggplot2)
+library(tsibble)
+library(tseries)
+library(MASS)
+library(readr)
+library(forecast)
+```
+
+# Data
+```{r}
+weather <- read.csv("C:/Users/Robert/Downloads/cleaned_weather.csv")
+```
+
+### Ambil 100 Data
+```{r}
+data <- weather[401:500, c("date","VPdef")]
+data
+```
+
+```{r}
+data$VPdef <- as.numeric(data$VPdef)
+data$VPdef
+```
+
+### Data Time Series
+```{r}
+data_ts <- ts(data$VPdef)
+data_ts
+```
+
+## Plot Data
+```{r}
+ts.plot(data_ts, xlab="Time Period", ylab="VPdef", 
+        main = "Time Series Plot")
+points(data_ts)
+```
+
+## Stasioneritas
+```{r}
+mean(data_ts)
+var(data_ts)
+```
+
+## Plot ACF
+```{r}
+acf(data_ts, main="ACF VPdef")
+```
+
+## Uji ADF
+```{r}
+adf.test(data_ts)
+```
+$H_0$ : Data tidak stasioner dalam rataan
+$H_1$ : Data stasioner dalam rataan
+
+Hasil uji ADF menunjukkan p-value 0.9301 > 0.05, sehingga gagal menolak $H_0$ yang bearti data tidak stasioner dalam rataan.
+
+## Plot Box-Cox
+```{r}
+index = seq(401:500)
+b = boxcox(data_ts~index, lambda = seq(-1,4,by=1))
+```
+### Nilai Rounded Lambda
+```{r}
+lambda = b$x[which.max(b$y)]
+lambda
+```
+### SK  
+```{r}
+b$x[b$y > max(b$y) - 1/2 * qchisq(.95,1)]
+```
+Hasil plot Box-Cox menunjukkan nilai *rounded value* ($\lambda$) optimum sebesar 0.515 dan pada selang kepercayaan 95% memiliki batas bawah -0.545 dan batas atas 1.626. Selang tersebut memuat nilai 1 sehingga transformasi tidak wajib dilakukan, namun dapat dicoba untuk meningkatkan stasioneritas data.
+
+# Partisi Data
+
+## Data Training
+```{r}
+data_ts1 <- data_ts[1:80] |> ts()
+mean(data_ts1)
+var(data_ts1)
+```
+
+### Plot Time Series Data Training
+```{r}
+data_ts1 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line()+theme_bw() +
+  xlab("Amatan") + ylab("Nilai")
+```
+
+### Plot ACF Data Training
+```{r}
+acf(data_ts1, main="ACF Data Training")
+```
+
+### Uji ADF Data Training
+```{r}
+adf.test(data_ts1)
+```
+$H_0$ : Data tidak stasioner dalam rataan
+$H_1$ : Data stasioner dalam rataan
+
+Hasil uji ADF menunjukkan p-value 0.9245 > 0.05, sehingga gagal menolak $H_0$ yang bearti data tidak stasioner dalam rataan.
+
+### Plot Box-Cox Data Training
+```{r}
+index1 = seq(1:80)
+b1 = boxcox(data_ts1~index1, lambda = seq(-1,4,by=1))
+```
+
+#### Nilai Rounded Lambda
+```{r}
+lambda1 = b1$x[which.max(b1$y)]
+lambda1
+```
+
+#### SK
+```{r}
+b1$x[b1$y > max(b1$y) - 1/2 * qchisq(.95,1)]
+```
+Hasil plot Box-Cox menunjukkan nilai *rounded value* ($\lambda$) optimum sebesar 0.5656 dan pada selang kepercayaan 95% memiliki batas bawah -0.5959 dan batas atas 1.727. Selang tersebut memuat nilai 1.
+
+## Data Testing
+```{r}
+data_ts2 <- data_ts[81:100] |> ts()
+mean(data_ts2)
+var(data_ts2)
+```
+
+### Plot Time Series Data Testing
+```{r}
+data_ts2 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line()+theme_bw() +
+  xlab("Amatan") + ylab("Nilai")
+```
+
+### Plot ACF Data Testing
+```{r}
+acf(data_ts2, main="ACF Data Testing")
+```
+
+### Uji ADF Data Testing
+```{r}
+adf.test(data_ts2)
+```
+$H_0$ : Data tidak stasioner dalam rataan
+$H_1$ : Data stasioner dalam rataan
+
+Hasil uji ADF menunjukkan p-value 0.8981 > 0.05, sehingga gagal menolak $H_0$ yang bearti data tidak stasioner dalam rataan.
+
+### Plot Box-Cox Data Testing
+```{r}
+index2 = seq(81:100)
+b2 = boxcox(data_ts2~index2, lambda = seq(-1,4,by=1))
+```
+
+#### Nilai Rounded Lambda
+```{r}
+lambda2 = b2$x[which.max(b2$y)]
+lambda2
+```
+
+#### SK
+```{r}
+b2$x[b2$y > max(b2$y) - 1/2 * qchisq(.95,1)]
+```
+Hasil plot Box-Cox menunjukkan nilai *rounded value* ($\lambda$) optimum sebesar -1 dan pada selang kepercayaan 95% memiliki batas bawah -1 dan batas atas 2.838. Selang tersebut memuat nilai 1.
+
+# Penanganan
+
+## Transformasi Box-Cox
+```{r}
+# Transformasi Box-Cox dengan Lambda = 0.515
+data_bc <- BoxCox(data_ts, lambda = 0.515)
+
+# Plot Hasil Transformasi
+ts.plot(data_bc, xlab = "Time Period", ylab = "Transformed VPdef",
+        main = "Box-Cox Transformed VPdef")
+points(data_bc)
+```
+
+### Plot Sesudah Transformasi Box-Cox
+```{r}
+# Index waktu
+index <- seq_along(data_bc)
+
+# tambah konstanta agar semua nilai positif
+data_bc_shifted <- data_bc - min(data_bc) + 1
+
+# model Regresi Dummy
+model_bc <- lm(data_bc_shifted ~ index)
+
+# plot Box-Cox
+b <- boxcox(model_bc, lambda = seq(-1, 4, by = 0.1))
+```
+
+#### Nilai Lambda Optimum
+```{r}
+lambda_bc <- b$x[which.max(b$y)]
+lambda_bc
+```
+
+#### SK
+```{r}
+b$x[b$y > max(b$y) - 1/2 * qchisq(.95,1)]
+```
+Hasil plot Box-Cox menunjukkan nilai *rounded value* ($\lambda$) optimum sebesar 0.919 dan pada selang kepercayaan 95% memiliki batas bawah -0.29 dan batas atas 2.18. Selang tersebut memuat nilai 1 sehingga hasil transformasi Box-Cox tetap stasioner dalam ragam.
+
+## Diferensiasi
+```{r}
+# Diferensiasi orde 1
+data_diff1 <- diff(data_bc, differences = 1)
+
+# Plot hasil diferensiasi
+ts.plot(data_diff1, xlab = "Time Period", ylab = "Diferensiasi VPdef",
+        main = "Diferensiasi Pertama VPdef")
+points(data_diff1)
+```
+
+### Plot ACF Diferensiasi
+```{r}
+acf(data_diff1, main = "ACF Diferensiasi Pertama VPdef")
+```
+Dari hasil diferensiasi, plot ACF mengalami cut-off dan mayoritas lag berada dalam selang kepercayaan, sehingga data sudah lebih stasioner dan tren dapat ditangani.
+
+### Uji ADF Diferensiasi
+```{r}
+adf.test(data_diff1)
+```
+$H_0$ : Data tidak stasioner dalam rataan
+$H_1$ : Data stasioner dalam rataan
+
+Hasil uji ADF menunjukkan p-value 0.01 < 0.05, sehingga menolak $H_0$ yang bearti data sudah stasioner dalam rataan.
+
+# Kesimpulan
+Dari analisis yang telah dilakukan, awalnya data VPdef tidak stasioner dalam rataan dan ragam. Lalu, dilakukan transformasi Box-Cox dengan ($\lambda$) = 0.515 sehingga data stasioner dalam ragam. Kemudian, dilakukan diferensiasi sehingga data stasioner dalam rataan. Hasil uji ADF menunjukkan p-value 0.01 < 0.05 yang berarti data sudah stasioner.
+
